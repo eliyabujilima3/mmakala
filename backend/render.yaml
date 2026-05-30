@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: grace-backend
+    env: python
+    region: oregon
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app
+    healthCheckPath: /
