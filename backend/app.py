@@ -34,8 +34,7 @@ def create_tables():
     db.commit()
 
 
-@app.before_first_request
-def before_first_request():
+with app.app_context():
     os.makedirs(BASE_DIR, exist_ok=True)
     create_tables()
 
@@ -67,6 +66,7 @@ def contacts():
 
     if request.method == "POST":
         data = request.get_json(silent=True) or {}
+
         name = (data.get("name") or "").strip()
         email = (data.get("email") or "").strip()
         phone = (data.get("phone") or "").strip()
@@ -76,46 +76,61 @@ def contacts():
             return jsonify({"error": "Name and email are required."}), 400
 
         created_at = datetime.utcnow().isoformat() + "Z"
+
         db = get_db()
         cursor = db.execute(
-            "INSERT INTO contacts (name, email, phone, message, created_at) VALUES (?, ?, ?, ?, ?)",
+            """
+            INSERT INTO contacts
+            (name, email, phone, message, created_at)
+            VALUES (?, ?, ?, ?, ?)
+            """,
             (name, email, phone, message, created_at),
         )
         db.commit()
 
-        return (
-            jsonify(
-                {
-                    "id": cursor.lastrowid,
-                    "name": name,
-                    "email": email,
-                    "phone": phone,
-                    "message": message,
-                    "created_at": created_at,
-                }
-            ),
-            201,
-        )
+        return jsonify(
+            {
+                "id": cursor.lastrowid,
+                "name": name,
+                "email": email,
+                "phone": phone,
+                "message": message,
+                "created_at": created_at,
+            }
+        ), 201
 
     db = get_db()
-    rows = db.execute("SELECT * FROM contacts ORDER BY id DESC").fetchall()
+    rows = db.execute(
+        "SELECT * FROM contacts ORDER BY id DESC"
+    ).fetchall()
+
     return jsonify([dict(row) for row in rows])
 
 
 @app.route("/api/contacts/<int:contact_id>", methods=["GET", "DELETE"])
 def contact_detail(contact_id):
     db = get_db()
-    row = db.execute("SELECT * FROM contacts WHERE id = ?", (contact_id,)).fetchone()
+
+    row = db.execute(
+        "SELECT * FROM contacts WHERE id = ?",
+        (contact_id,)
+    ).fetchone()
+
     if row is None:
         return jsonify({"error": "Contact not found."}), 404
 
     if request.method == "DELETE":
-        db.execute("DELETE FROM contacts WHERE id = ?", (contact_id,))
+        db.execute(
+            "DELETE FROM contacts WHERE id = ?",
+            (contact_id,)
+        )
         db.commit()
+
         return jsonify({"deleted": contact_id})
 
     return jsonify(dict(row))
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=False)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=False)
